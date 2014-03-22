@@ -1,6 +1,20 @@
 #
+#  oooo                                         o8o
+#  `888                                         `"'
+#   888 .oo.    .oooo.   ooo. .oo.    .ooooo.  oooo  oo.ooooo.   .oooo.o
+#   888P"Y88b  `P  )88b  `888P"Y88b  d88' `88b `888   888' `88b d88(  "8
+#   888   888   .oP"888   888   888  888   888  888   888   888 `"Y88b.
+#   888   888  d8(  888   888   888  888   888  888   888   888 o.  )88b
+#  o888o o888o `Y888""8o o888o o888o `Y8bod8P' o888o  888bod8P' 8""888P'
+#                                                     888
+#                                                    o888o
+#
+# Hanoips is a Towers of Hanoi console game written in MIPS assembly by Chris Barrick
+# https://github.com/cbarrick/hanoips
+
+
 # CONTENTS
-# ---
+# --------
 # Data
 #   Constants
 #   Globals
@@ -19,7 +33,7 @@
 	# ==================================================
 
 	CHAR_BLOCK: .asciiz "X"
-	CHAR_LF:    .asciiz "\n"
+	CHAR_EOL:   .asciiz "\n"
 	CHAR_LINE:  .asciiz "-"
 	CHAR_PAD:   .asciiz " "
 
@@ -35,11 +49,13 @@
 	# Globals
 	# ==================================================
 
-	HOLD: .word 0
+	HOLD: .word 0 # The level of the piece being held, see `hold` and `drop`
 
-	HEIGHT: .word 0
-	WIDTH:  .word 0
+	HEIGHT: .word 0 # The height of the tallest possible tower, i.e. the level of the biggest piece
+	WIDTH:  .word 0 # The width of the widest piece, i.e. HEIGHT * 2 - 1
 
+	# The array of pieces for each tower. Pieces are identified by their "level" or size.
+	# Higher levels are bigger pieces; 0 means no piece. Each array must be null-terminated.
 	TOWER1: .word 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	TOWER2: .word 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	TOWER3: .word 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -51,12 +67,15 @@
 
 	# Function Call Utilities
 	# ==================================================
-	# Use `save` to initialize a function call and `return` to return from one. The address passed
-	# to `save` is the one jumped to by `return`. The register $s7 is permanently reserved for this.
+	# Use `jal save` to initialize a function call and `j return` to return from one. The address
+	# passed to `save` is the one jumped to by `return`. The register $s7 is permanently reserved
+	# for use by these functions.
 
-	# function save (return addr)
+	# function save (addr)
 	# --------------------------------------------------
-	# Push the $s registers to the stack and put `return addr` in $s7
+	# Push the $s registers to the stack and put `addr` in $s7
+	# Params:
+	#   - addr: The address to which to jumped when you return
 	save:
 		addi $sp, $sp, -32
 		sw $s0, 0($sp)
@@ -73,6 +92,7 @@
 	# function return ()
 	# --------------------------------------------------
 	# Pop the $s registers from the stack and jump to the address in $s7
+	# You should call this without linking, i.e. `j return`
 	return:
 		move $ra, $s7
 		lw $s0, 0($sp)
@@ -92,7 +112,10 @@
 
 	# function drawStr (str, count):
 	# --------------------------------------------------
-	# Prints a string `count` number of times
+	# Print a string some number of times
+	# Params:
+	#   - str: The address of the string to print
+	#   - count: The number of times to print the string
 	drawStr:
 		beq $a1, 0, drawStr_ret
 		move $t0, $a1
@@ -103,11 +126,11 @@
 		drawStr_ret:
 		jr $ra
 
-	# function lf ():
+	# function eol ():
 	# --------------------------------------------------
-	# Print a line feed
-	lf:
-		la $a0, CHAR_LF
+	# Print a line ending
+	eol:
+		la $a0, CHAR_EOL
 		li $v0, 4
 		syscall
 		jr $ra
@@ -140,6 +163,7 @@
 
 		# s2 is padding width
 		lw $s1, WIDTH
+		addi $s1, $s1, 2
 		sub $s1, $s1, $s0
 		srl $s1, $s1, 1
 
@@ -170,12 +194,13 @@
 
 		# $s1 is border width
 		lw $s1, WIDTH
+		addi $s1, $s1, 2
 		mult $s0, $s1
 		mflo $s1
 
 		# $s2 is padding width
 		lw $s2, WIDTH
-		addi $s2, $s2, -1
+		addi $s2, $s2, 1
 		srl $s2, $s2, 1
 
 		# $s3 is loop counter
@@ -185,7 +210,7 @@
 		la $a0, CHAR_LINE
 		move $a1, $s1
 		jal drawStr
-		jal lf
+		jal eol
 
 		# draw labels
 		drawLabels_loop:
@@ -203,14 +228,14 @@
 			j drawLabels_loop
 		drawLabels_loop_exit:
 
-		jal lf
+		jal eol
 
 		# return
 		j return
 
 	# function drawState ()
 	# --------------------------------------------------
-	# Prints the towers
+	# Print the towers with labels
 	drawState:
 		# save stack
 		move $a0, $ra
@@ -244,7 +269,7 @@
 			lw $a0, 0($t0)
 			jal drawPiece
 
-			jal lf
+			jal eol
 			addi $s0, $s0, -1
 			j drawState_loop
 		drawState_loop_exit:
@@ -258,9 +283,11 @@
 	# Gameplay Helpers
 	# ==================================================
 
-	# function hold (tower addr)
+	# function hold (tower)
 	# --------------------------------------------------
 	# Take the top piece off the top of a tower and hold it
+	# Params:
+	#   - tower: The address of the tower
 	hold:
 		# get args
 		move $t0, $a0
@@ -284,9 +311,11 @@
 		# return
 		j return
 
-	# function drop (tower addr)
+	# function drop (tower)
 	# --------------------------------------------------
 	# Drop the held piece on the given tower
+	# Params:
+	#   - tower: The address of the tower
 	drop:
 		# get args
 		move $t0, $a0
@@ -309,9 +338,11 @@
 		# return
 		j return
 
-	# function getTop (tower addr)
+	# function getTop (tower)
 	# --------------------------------------------------
-	# Returns the level of the piece on top of the given tower
+	# Return the level of the piece on top of the given tower
+	# Params:
+	#   - tower: The address of the tower
 	getTop:
 		# get args
 		move $t0, $a0
@@ -341,7 +372,7 @@
 
 	# function setup ()
 	# --------------------------------------------------
-	# Prompts the user for settings and sets up the game
+	# Prompt the user for settings and initializes the game
 	setup:
 		# save stack
 		move $a0, $ra
@@ -355,7 +386,7 @@
 		li $v0, 5
 		syscall
 		move $s0, $v0 # $s0 is input
-		jal lf
+		jal eol
 
 		# validate input
 		lw $t0, MAX_HEIGHT
@@ -365,7 +396,7 @@
 		la $a0, PROMPT_TOO_TALL
 		li $a1, 1
 		jal drawStr
-		jal lf
+		jal eol
 		j setup_prompt
 		setup_valid:
 
@@ -374,7 +405,7 @@
 
 		# setup game width
 		sll $s0, $s0, 1
-		addi $s0, $s0, 1
+		addi $s0, $s0, -1
 		sw $s0, WIDTH
 
 		# build tower
@@ -397,13 +428,14 @@
 
 	# function play ()
 	# --------------------------------------------------
+	# Print the towers, get input from the user, make the move, wash, rinse, and repeat
 	play:
 		# save stack
 		move $a0, $ra
 		jal save
 
 		play_loop:
-			jal lf
+			jal eol
 			jal drawState
 
 			# get "from" input, $s0 is "from" tower addr
@@ -435,10 +467,10 @@
 			# validate input
 			move $a0, $s0
 			jal getTop
-			move $s2, $v0 # $s2 is top of tower at $s0
+			move $s2, $v0 # $s2 is the level of the top piece of the "from" tower
 			move $a0, $s1
 			jal getTop
-			move $s3, $v0 # $s3 is top of tower at $s1
+			move $s3, $v0 # $s3 is the level of the top piece of the "to" tower
 			beq $s3, 0, play_valid
 			blt $s2, $s3, play_valid
 			j play_loop
@@ -459,12 +491,12 @@
 			j play_loop
 		play_loop_exit:
 
-		jal lf
+		jal eol
 		jal drawState
 		la $a0, PROMPT_WIN
 		li $a1, 1
 		jal drawStr
-		jal lf
+		jal eol
 
 		# return
 		j return
