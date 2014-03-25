@@ -68,16 +68,15 @@
 	# Function Call Utilities
 	# ==================================================
 	# Use `jal save` to initialize a function call and `j return` to return from one. The address
-	# passed to `save` is the one jumped to by `return`. The register $s7 is permanently reserved
-	# for use by these functions.
+	# passed to `save` is the one jumped to by `return`.
 
 	# function save (addr)
 	# --------------------------------------------------
-	# Push the $s registers to the stack and put `addr` in $s7
+	# Push the $s registers and `addr` to the stack
 	# Params:
 	#   - addr: The address to which to jumped when you return
 	save:
-		addi $sp, $sp, -32
+		addi $sp, $sp, -36
 		sw $s0, 0($sp)
 		sw $s1, 4($sp)
 		sw $s2, 8($sp)
@@ -86,15 +85,14 @@
 		sw $s5, 20($sp)
 		sw $s6, 24($sp)
 		sw $s7, 28($sp)
-		move $s7, $a0
+		sw $a0, 32($sp)
 		jr $ra
 
 	# function return ()
 	# --------------------------------------------------
-	# Pop the $s registers from the stack and jump to the address in $s7
+	# Restore the stack after a `save` and jump to the address passed to `save`
 	# You should call this without linking, i.e. `j return`
 	return:
-		move $ra, $s7
 		lw $s0, 0($sp)
 		lw $s1, 4($sp)
 		lw $s2, 8($sp)
@@ -103,7 +101,8 @@
 		lw $s5, 20($sp)
 		lw $s6, 24($sp)
 		lw $s7, 28($sp)
-		addi $sp, $sp, 32
+		lw $ra, 32($sp)
+		addi $sp, $sp, 36
 		jr $ra
 
 
